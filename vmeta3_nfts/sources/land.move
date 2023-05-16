@@ -24,8 +24,15 @@ module vmeta3_nfts::land {
         injection_details: VecMap<address, u64>,
     }
 
-    struct LandCap has key {
+    struct OwnerCap has key {
         id: UID
+    }
+
+    struct InjectCap has key {
+        id: UID,
+        land_id: ID,
+        active: u64,
+        to: address,
     }
 
     struct ActivationEvent has copy, drop{
@@ -34,19 +41,20 @@ module vmeta3_nfts::land {
         status: bool,
     }
 
+    // Errors
     const EAlreadyActive: u64 = 0;
     const EActiveValueIsZero: u64 = 1;
     const ETooManyActiveValues: u64 = 2;
+    const EInvalidLandId: u64 = 3;
 
 
     fun init(ctx: &mut TxContext) {
-        transfer::transfer(LandCap {
+        transfer::transfer(OwnerCap {
             id: object::new(ctx)
         }, tx_context::sender(ctx));
     }
 
-
-    public entry fun mint(_: &LandCap, to: address, conditions: u64, token_uri: vector<u8>, ctx: &mut TxContext) {
+    public entry fun mint(_: &OwnerCap, to: address, conditions: u64, token_uri: vector<u8>, ctx: &mut TxContext) {
         let status = false;
         if (conditions == 0) status = true;
 
@@ -66,7 +74,10 @@ module vmeta3_nfts::land {
         transfer::transfer(land, to);
     }
 
-    fun inject_active_(_: &LandCap, land: &mut Land, active: u64, account: address) {
+    fun inject_active_(inject_cap: InjectCap, land: &mut Land) {
+        let InjectCap {id: id, land_id, active, to} = inject_cap;
+        
+        assert!(object::uid_to_inner(&land.id) == land_id, EInvalidLandId);
         assert!(land.active_value.status == false, EAlreadyActive);
         assert!(active > 0, EActiveValueIsZero);
         assert!(land.active_value.total + active <= land.active_value.conditions, ETooManyActiveValues);
@@ -75,11 +86,11 @@ module vmeta3_nfts::land {
 
         let injection_details = land.active_value.injection_details;
         
-        let option_value =  vec_map::try_get(&injection_details, &account);
+        let option_value =  vec_map::try_get(&injection_details, &to);
         if (option::is_some(&option_value)) {
-            *vec_map::get_mut(&mut injection_details, &account) = *option::borrow(&option_value) + active;
+            *vec_map::get_mut(&mut injection_details, &to) = *option::borrow(&option_value) + active;
         }else{
-            vec_map::insert(&mut injection_details, account, active);
+            vec_map::insert(&mut injection_details, to, active);
         };
 
         if (land.active_value.total == land.active_value.conditions) land.active_value.status = true;
@@ -89,14 +100,12 @@ module vmeta3_nfts::land {
             active,
             status: land.active_value.status,
         });
+
+        object::delete(id);
     }
 
-    public entry fun inject_active(cap: &LandCap, land: &mut Land, active: u64, ctx: &mut TxContext) {
-        inject_active_(cap, land, active, tx_context::sender(ctx));
-    }
-
-    public entry fun inject_active_to(cap: &LandCap, land: &mut Land, active: u64, to: address) {
-        inject_active_(cap, land, active, to);
+    public entry fun inject_active(inject_cap: InjectCap, land: &mut Land) {
+        inject_active_(inject_cap, land);
     }
 
     public fun get_land_status (land: &Land): bool {
@@ -114,6 +123,17 @@ module vmeta3_nfts::land {
         } else {
             0
         }
+    }
+
+    public entry fun create_inject_capability(_: &OwnerCap, land: &Land, active: u64, to: address, cap_transfer_to: address, ctx: &mut TxContext){
+        let id = object::new(ctx);
+        let cap = InjectCap {
+            id,
+            land_id: object::uid_to_inner(&land.id),
+            active,
+            to,
+        };
+        transfer::transfer(cap, cap_transfer_to);
     }
 
     #[test_only]

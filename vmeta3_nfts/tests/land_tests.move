@@ -3,7 +3,7 @@
 
 #[test_only]
 module vmeta3_nfts::land_tests {
-    use vmeta3_nfts::land::{Self, Land, LandCap};
+    use vmeta3_nfts::land::{Self, Land, OwnerCap, InjectCap};
     use sui::test_scenario::{Self, next_tx, ctx};
 
     #[test]
@@ -21,25 +21,40 @@ module vmeta3_nfts::land_tests {
         // Mint a `Land` object
         next_tx(test, admin);
         {
-            let landCap = test_scenario::take_from_sender<LandCap>(test);
+            let owner_cap = test_scenario::take_from_sender<OwnerCap>(test);
             let conditions = 100;
             let token_uri = b"http://example.com/land/1";
-            land::mint(&landCap, user1, conditions, token_uri, ctx(test));
-            test_scenario::return_to_sender<LandCap>(test, landCap);
+            land::mint(&owner_cap, user1, conditions, token_uri, ctx(test));
+
+            test_scenario::return_to_sender<OwnerCap>(test, owner_cap);
+        };
+
+        // Create a `InjectCap` to user1
+        next_tx(test, admin);
+        {
+
+            let land = test_scenario::take_from_address<Land>(test, user1);
+            let owner_cap = test_scenario::take_from_sender<OwnerCap>(test);
+
+            let active = 100;
+            land::create_inject_capability(&owner_cap, &land, active, user1, user1, ctx(test));
+
+            test_scenario::return_to_address<Land>(user1, land);
+            test_scenario::return_to_sender<OwnerCap>(test, owner_cap);
         };
         
         next_tx(test, user1);
         {
             let land = test_scenario::take_from_sender<Land>(test);
+            let inject_cap = test_scenario::take_from_sender<InjectCap>(test);
+
             let status = land::get_land_status(&land);
             assert!(status == false, 0);
-            let active = 100;
 
-            let landCap = test_scenario::take_from_address<LandCap>(test, admin);
-            land::inject_active(&landCap, &mut land, active, ctx(test));
+            land::inject_active(inject_cap, &mut land);
             let status = land::get_land_status(&land);
             assert!(status == true, 0);
-            test_scenario::return_to_address<LandCap>(admin, landCap);
+
             test_scenario::return_to_sender<Land>(test, land);
         };
 
