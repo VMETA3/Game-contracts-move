@@ -143,4 +143,10 @@ module vov::vov {
     fun timestamp(ctx: &TxContext): u64 {
         tx_context::epoch_timestamp_ms(ctx)
     }
+
+     #[test_only]
+    /// Wrapper of module initializer for testing
+    public fun test_init(ctx: &mut TxContext) {
+        init(VOV{}, ctx);
+    }
 }
