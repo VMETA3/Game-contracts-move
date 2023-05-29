@@ -62,7 +62,7 @@ module drawing_game::drawing_game {
         transfer::share_object(init_lock);
     }
 
-    public fun initializeinit<T: key+store>(ctx: &mut TxContext, init_lock:&mut InitLock) {
+    public fun initialize<T: key+store>(ctx: &mut TxContext, init_lock:&mut InitLock) {
         assert!(init_lock.has_init==false, EAlreadyInitialized);
         
         let bonus_pool = BonusPool {
