@@ -8,6 +8,7 @@ module vov::vov {
     use sui::object::{Self, UID};
     use sui::balance::{Self, Balance};
     use sui::vec_map::{Self, VecMap};
+    use sui::clock::{Self, Clock};
 
     //constant
     const TwoDay: u64 = 2*24*60*60*1000; //ms
@@ -17,7 +18,6 @@ module vov::vov {
     const EMintClosed: u64 = 1;
     const EOnlyAdminCanDo: u64 = 2;
     const EMintRecently: u64 = 3;
-    const EOnlyMinterCanDo: u64 = 4;
 
     struct VOV has drop {
 
@@ -52,7 +52,7 @@ module vov::vov {
 
         let mint_switch = MintSwitch{
             id: object::new(ctx),
-            opened: false,
+            opened: true,
             time: 0,
         };
         let admin_params = AdminParams{
@@ -72,22 +72,22 @@ module vov::vov {
 
     public entry fun delayed_mint(
        treasury_cap: &mut TreasuryCap<VOV>, delayed_mint_data:&mut DelayMintData,
-       admin_params: &AdminParams, amount: u64, recipient: address, ctx: &mut TxContext
+       admin_params: &AdminParams, recipient: address, amount: u64,  clock: &Clock,ctx: &mut TxContext
     ) {
-        assert!(admin_params.mint_switch.opened==true && timestamp(ctx)-admin_params.mint_switch.time >= TwoDay, EMintClosed);
+        assert!(admin_params.mint_switch.opened==true && timestamp(clock)-admin_params.mint_switch.time >= TwoDay, EMintClosed);
        
-        check_and_handle_delayed_balance(&mut delayed_mint_data.balances, &mut delayed_mint_data.times, recipient, ctx);
+        check_and_handle_delayed_balance(&mut delayed_mint_data.balances, &mut delayed_mint_data.times, recipient, clock,ctx);
         assert!(vec_map::contains(&delayed_mint_data.balances, &recipient)==false, EMintRecently);
 
         // mint vov and add to delayed treasury
         let b  = coin::mint_balance(treasury_cap, amount);
         // record user delayed balance
         vec_map::insert(&mut delayed_mint_data.balances, recipient, b);
-        vec_map::insert(&mut delayed_mint_data.times, recipient, timestamp(ctx));
+        vec_map::insert(&mut delayed_mint_data.times, recipient, timestamp(clock));
     }
 
-    public entry fun transfer(c: &mut Coin<VOV>, value: u64, recipient: address,  delayed_mint_data:&mut DelayMintData,ctx: &mut TxContext) {
-        check_and_handle_delayed_balance(&mut delayed_mint_data.balances, &mut delayed_mint_data.times, tx_context::sender(ctx), ctx);
+    public entry fun transfer(c: &mut Coin<VOV>, value: u64, recipient: address,  delayed_mint_data:&mut DelayMintData, clock: &Clock,ctx: &mut TxContext) {
+        check_and_handle_delayed_balance(&mut delayed_mint_data.balances, &mut delayed_mint_data.times, tx_context::sender(ctx), clock,ctx);
 
         transfer::public_transfer(
             coin::split(c, value, ctx), 
@@ -101,11 +101,11 @@ module vov::vov {
         admin_params.mint_switch.opened = false;
     }
 
-    public entry fun open_mint(admin_params: &mut AdminParams, ctx: &mut TxContext) {
+    public entry fun open_mint(admin_params: &mut AdminParams, clock: &Clock,ctx: &mut TxContext) {
         check_admin(admin_params, tx_context::sender(ctx));
 
         admin_params.mint_switch.opened = true;
-        admin_params.mint_switch.time = timestamp(ctx);
+        admin_params.mint_switch.time = timestamp(clock);
     }
 
     public entry fun update_admin_owner_params(new_admin:address, admin_params: &mut AdminParams, ctx: &mut TxContext) {
@@ -114,8 +114,8 @@ module vov::vov {
         admin_params.owner = new_admin;
     }
 
-    public entry fun balanceOf(delayed_mint_data:&DelayMintData, account:address, ctx: &mut TxContext): u64 {
-        if (vec_map::contains(&delayed_mint_data.balances, &account) && timestamp(ctx) - *vec_map::get(&delayed_mint_data.times, &account) >= OneWeek) {
+    public entry fun balance_of(delayed_mint_data:&DelayMintData, account:address, clock: &Clock): u64 {
+        if (vec_map::contains(&delayed_mint_data.balances, &account) && timestamp(clock) - *vec_map::get(&delayed_mint_data.times, &account) >= OneWeek) {
             let b = vec_map::get(&delayed_mint_data.balances, &account);
            
             return (balance::value(b))
@@ -124,10 +124,10 @@ module vov::vov {
         return (0)
     }
 
-    fun check_and_handle_delayed_balance(balances:&mut VecMap<address, Balance<VOV>>, times:&mut VecMap<address, u64>, account:address, ctx: &mut TxContext) {
+    fun check_and_handle_delayed_balance(balances:&mut VecMap<address, Balance<VOV>>, times:&mut VecMap<address, u64>, account:address, clock: &Clock,ctx: &mut TxContext) {
         // if had deplayed balance unfreeze, transfer to receipt
         if(vec_map::contains(balances, &account) && 
-        timestamp(ctx) - *vec_map::get(times, &account) >= OneWeek){
+        timestamp(clock) - *vec_map::get(times, &account) >= OneWeek){
             let (_,b) = vec_map::remove(balances, &account);
             vec_map::remove(times, &account);
 
@@ -140,8 +140,8 @@ module vov::vov {
         assert!(admin_params.owner == account, EOnlyAdminCanDo);
     }
 
-    fun timestamp(ctx: &TxContext): u64 {
-        tx_context::epoch_timestamp_ms(ctx)
+    fun timestamp(clock: &Clock): u64 {
+        clock::timestamp_ms(clock)
     }
 
      #[test_only]
