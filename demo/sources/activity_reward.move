@@ -5,11 +5,11 @@ module demo::activity_reward{
     use sui::event;
     use sui::tx_context::{Self, TxContext};
     use std::vector;
-    use sui::clock::{Self, Clock};
-    use std::hash;
+    use sui::clock::Clock;
     use sui::address;
     use sui::transfer;
     use sui::object::{Self, UID};
+    use demo::util;
 
     struct ActivityReward has key {
         id: UID,
@@ -95,57 +95,21 @@ module demo::activity_reward{
 
     public entry fun get_multiple_reward(nonce: u64, clock: &Clock, ctx: &mut TxContext) {
         let account = tx_context::sender(ctx);
-        multiple_reward_(account, nonce, clock);
+        multiple_reward_(account, nonce, clock, ctx);
     }
 
-    public entry fun get_multiple_reward_to(to: address, nonce: u64, clock: &Clock) {
-        multiple_reward_(to, nonce, clock);
+    public entry fun get_multiple_reward_to(to: address, nonce: u64, clock: &Clock, ctx: &mut TxContext) {
+        multiple_reward_(to, nonce, clock, ctx);
     }
 
-    fun multiple_reward_(account: address, _nonce: u64, clock: &Clock) {
-        let num = random_number(clock);
+    fun multiple_reward_(account: address, nonce: u64, clock: &Clock, ctx: &mut TxContext) {
+        let num = util::random_n2(nonce, clock, ctx);
+
 
         event::emit(GetRewardEvent {
             account: account,
             amount: num,
         });
-    }
-
-    public fun random_number(clock: &Clock): u64 {
-        let timestamp = clock::timestamp_ms(clock);
-        let n = bytes2u64(hash::sha3_256(u642bytes(timestamp)));
-        event::emit(RequestSentEvent {
-            request_id: timestamp,
-            num_words: timestamp,
-        });
-        n
-    }
-
-    fun bytes2u64(data:vector<u8>): u64 {
-        let result:u64 = 0;
-        let l = vector::length(&data);
-        let i = 0;
-        while (i < l) {
-            let b = vector::borrow(&data, i);
-            result = (result << 8) | (*b as u64);
-            i=i+1;
-        };
-
-        result
-    }
-
-    fun u642bytes(n:u64): vector<u8> {
-        let data = vector::empty<u8>();
-        while(true){
-            vector::push_back(&mut data, (n%8 as u8));
-            n = n / 8;
-            if (n==0) {
-                break
-            };
-        };
-
-        vector::reverse(&mut data);
-        data
     }
 
     public entry fun withdraw_released_reward(ctx: &mut TxContext) {
