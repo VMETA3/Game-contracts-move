@@ -17,7 +17,6 @@ module demo::drawing_game {
         
     }
 
-    
     struct InvestmentAccount has copy,drop {
         addr:address,
         level:u8,
@@ -82,7 +81,7 @@ module demo::drawing_game {
             };
 
             let rand_number = util::bytes2u64(rand_number_bytes);
-            let winner = who_win(rand_number, &mut users, &users_weight);
+            let winner = who_win(rand_number%users_total_weight, &mut users, &users_weight);
             vector::push_back(&mut winners, winner);
             vector::push_back(&mut winner_nfts, vector::pop_back(&mut bonus_pool.nfts));
 
