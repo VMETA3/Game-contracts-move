@@ -8,8 +8,19 @@ module demo::activity_reward{
     use sui::clock::{Self, Clock};
     use std::hash;
     use sui::address;
+    use sui::transfer;
+    use sui::object::{Self, UID};
 
-    struct FutureReleaseData has copy, drop {
+    struct ActivityReward has key {
+        id: UID,
+        spender: address,
+        check_released: u64,
+        release_reward_record: u64,
+        release_reward_inserted: bool,
+        future_release_data: vector<FutureReleaseData>,
+    }
+
+    struct FutureReleaseData has copy, store, drop {
         date: u64,
         amount: u64,
     }
@@ -37,6 +48,33 @@ module demo::activity_reward{
     struct RequestFulfilledEvent has copy, drop {
         request_id: u64,
         random_words: vector<u64>,
+    }
+
+    fun init(ctx: &mut TxContext) {
+        let a = ActivityReward {
+            id: object::new(ctx),
+            spender: address::from_u256(111),
+            check_released: 1000000000,
+            release_reward_record: 2000000000,
+            release_reward_inserted: true,
+            future_release_data: vector::empty<FutureReleaseData>(),
+        };
+
+        vector::push_back(&mut a.future_release_data, FutureReleaseData {
+            date: 1000000000,
+            amount: 1000000000,
+        });
+        vector::push_back(&mut a.future_release_data, FutureReleaseData {
+            date: 2000000000,
+            amount: 2000000000,
+        });
+        vector::push_back(&mut a.future_release_data, FutureReleaseData {
+            date: 3000000000,
+            amount: 3000000000,
+        });
+
+        transfer::share_object(a);
+
     }
 
     public entry fun get_free_reward(nonce: u64, ctx: &mut TxContext) {
@@ -110,10 +148,6 @@ module demo::activity_reward{
         data
     }
 
-    public entry fun check_released(_receiver: address): u64 {
-        9000000000
-    }
-
     public entry fun withdraw_released_reward(ctx: &mut TxContext) {
         let account = tx_context::sender(ctx);
         withdraw_released_reward_(account);
@@ -122,7 +156,7 @@ module demo::activity_reward{
     public entry fun withdraw_released_reward_to(to: address) {
         withdraw_released_reward_(to);
     }
-    // function _withdrawReleasedReward(address receiver) internal {
+
     fun withdraw_released_reward_(receiver: address) {
 
         event::emit(WithdrawReleasedRewardEvent {
@@ -131,8 +165,8 @@ module demo::activity_reward{
         });
     }
  
-    public entry fun injection_income_and_pool(_receiver: address, amount: u64): (u64, u64) {
-        (amount,amount)
+    public fun injection_income_and_pool(_receiver: address, amount: u64): (u64, u64) {
+        (amount/10,amount/10)
     }
 
     public entry fun inject_release_reward(receiver: address, amount: u64, _nonce: u64) {
@@ -142,32 +176,11 @@ module demo::activity_reward{
         });
     }
 
-    public entry fun spender(): address {
-        address::from_u256(111)
-    }
-
-    public entry fun release_reward_record(_user: address): u64 {
-        1000000000
-    }
-
-    public entry fun release_reward_inserted(_user: address): bool {
-        true
-    }
-
-    public entry fun release_reward_info(_user: address): (u64, u64) {
+    public fun release_reward_info(_user: address): (u64, u64) {
         (1000000000,1000000000)
     }
 
-    public entry fun future_release_data(_user: address): vector<FutureReleaseData> {
-        let v = vector::empty<FutureReleaseData>();
-        vector::push_back(&mut v, FutureReleaseData {
-            date: 1000000000,
-            amount: 1000000000,
-        });
-        vector::push_back(&mut v, FutureReleaseData {
-            date: 1000000000,
-            amount: 1000000000,
-        });
-        v
+    public entry fun future_release_data(a: &ActivityReward, _user: address): vector<FutureReleaseData> {
+        a.future_release_data
     }
 }
