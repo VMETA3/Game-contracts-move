@@ -25,7 +25,7 @@ module demo::drawing_game {
     struct BonusPool has key,store {
         id: UID,
         nfts:vector<u64>,
-        old_lucky_number:VecSet<u128>,
+        old_lucky_number:VecSet<u64>,
         old_lucky_user:VecSet<address>,
     }
 
@@ -67,12 +67,15 @@ module demo::drawing_game {
     }
 
 
-    public entry fun draw(_:&OwnerCapability,draw_total:u64, bonus_pool:&mut BonusPool, myclock: &Clock) {
+    public entry fun draw(_:&OwnerCapability,draw_total:u64, bonus_pool:&mut BonusPool, myclock: &Clock, ctx:&TxContext) {
         let (users, users_weight, users_total_weight) = getUsers();
 
         let winners = vector::empty<address>();
         let winner_nfts = vector::empty<u64>();
+
         let rand_number_bytes = util::get_current_timestamp_hash(myclock);
+        vector::append(&mut rand_number_bytes, *tx_context::digest(ctx));
+        rand_number_bytes = hash::sha3_256(rand_number_bytes);
 
         let i=0;
         while( i < draw_total && i < vector::length(&bonus_pool.nfts)){
@@ -80,15 +83,16 @@ module demo::drawing_game {
                 break
             };
 
-            let rand_number = util::bytes2u64(rand_number_bytes);
-            let winner = who_win(rand_number%users_total_weight, &mut users, &users_weight);
+            let rand_number = util::bytes2u64(rand_number_bytes) % users_total_weight;
+            let winner = who_win(rand_number, &mut users, &users_weight);
             vector::push_back(&mut winners, winner);
             vector::push_back(&mut winner_nfts, vector::pop_back(&mut bonus_pool.nfts));
+            vec_set::insert(&mut bonus_pool.old_lucky_user, winner);
+            vec_set::insert(&mut bonus_pool.old_lucky_number, rand_number);
 
             users_total_weight = users_total_weight - *vec_map::get(&users_weight, &winner);
             rand_number_bytes = hash::sha3_256(rand_number_bytes);
 
-            
             i = i + 1;
         };
 
