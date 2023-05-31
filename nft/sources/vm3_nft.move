@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module vmeta3_nfts::vm3_nft {
+module nft::vm3_nft {
     use sui::object::{Self, ID, UID};
     use sui::url::{Self, Url};
     use sui::event;

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module vmeta3_nfts::land {
+module nft::land {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{TxContext, sender};

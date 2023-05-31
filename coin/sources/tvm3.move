@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module vmeta3_coin::tvm3 {
+module coin::tvm3 {
     use std::option;
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;

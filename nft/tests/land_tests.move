@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module vmeta3_nfts::land_tests {
-    use vmeta3_nfts::land::{Self, Land, OwnerCap, InjectCap};
+module nft::land_tests {
+    use nft::land::{Self, Land, OwnerCap, InjectCap};
     use sui::test_scenario::{Self, next_tx, ctx};
 
     #[test]

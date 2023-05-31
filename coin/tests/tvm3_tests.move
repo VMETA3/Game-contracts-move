@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module vmeta3_coin::tvm3_tests {
-    use vmeta3_coin::tvm3::{Self, TVM3};
+module coin::tvm3_tests {
+    use coin::tvm3::{Self, TVM3};
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::test_scenario::{Self, next_tx, ctx};
 
