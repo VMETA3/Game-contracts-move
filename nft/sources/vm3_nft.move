@@ -1,5 +1,5 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) VMeta3 Labs, Inc.
+// SPDX-License-Identifier: MIT
 
 module nft::vm3_nft {
     use sui::object::{Self, ID, UID};

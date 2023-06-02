@@ -1,5 +1,5 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) VMeta3 Labs, Inc.
+// SPDX-License-Identifier: MIT
 
 module coin::tvm3 {
     use std::option;
