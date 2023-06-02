@@ -1,5 +1,5 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) VMeta3 Labs, Inc.
+// SPDX-License-Identifier: MIT
 
 module nft::land {
     use sui::object::{Self, ID, UID};
@@ -59,8 +59,16 @@ module nft::land {
     const EMintingAlreadyDisabled: u64 = 5;
     const EMintingAlreadyEnabled: u64 = 6;
     const ELessThanTheMinimumQuantity: u64 = 7;
+
+    fun init(ctx: &mut TxContext) {
+        let owner_cap = OwnerCap {
+            id: object::new(ctx),
+        };
+        transfer::transfer(owner_cap, sender(ctx));
+    }
     
-    public fun create_<T>(balance: Balance<T>, minter: address, active_condition: u64, minimum_injection_quantity: u64, ctx: &mut TxContext) {
+    public entry fun create<T>(_:&OwnerCap, coin: Coin<T>, minter: address, active_condition: u64, minimum_injection_quantity: u64, ctx: &mut TxContext) {
+        let balance = coin::into_balance(coin);
         let note = Noteboard {
             id: object::new(ctx),
             balance,
@@ -71,16 +79,11 @@ module nft::land {
             minimum_injection_quantity,
         };
 
-        let owner_cap = OwnerCap {
-            id: object::new(ctx),
-        };
-
         let minter_cap = MinterCap {
             id: object::new(ctx),
         }; 
 
         transfer::share_object(note);
-        transfer::transfer(owner_cap, sender(ctx));
         transfer::transfer(minter_cap, minter);
     }
 
