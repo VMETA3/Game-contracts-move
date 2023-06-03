@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) VMeta3 Labs, Inc.
+// SPDX-License-Identifier: MIT
 
 #[test_only]
 module vov::vov_tests {

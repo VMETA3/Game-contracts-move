@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Apache-2.0
+// Copyright (c) VMeta3 Labs, Inc.
+// SPDX-License-Identifier: MIT
 
 module vov::vov {
     use std::option;
