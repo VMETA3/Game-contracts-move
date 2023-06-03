@@ -1,6 +1,6 @@
 #[test_only]
-module ivm3::ivm3_tests {
-    use ivm3::ivm3::{Self, IVM3, Registry,EAddressBanned};
+module coin::ivm3_tests {
+    use coin::ivm3::{Self, IVM3, Registry,EAddressBanned};
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::test_scenario::{Self, next_tx, ctx,Scenario};
 

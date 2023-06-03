@@ -1,7 +1,7 @@
 // Copyright (c) VMeta3 Labs, Inc.
 // SPDX-License-Identifier: MIT
 
-module ivm3::ivm3 {
+module coin::ivm3 {
     use std::option;
     use sui::coin::{Self, Coin, TreasuryCap};
     use sui::transfer;
