@@ -14,6 +14,8 @@ module nft::land {
     use std::ascii;
     use std::option;
 
+    const TwoDay: u64 = 2 * 24 * 60 * 60 * 1000;
+
     struct Land has key {
         id: UID,
         token_uri: Url,
@@ -32,7 +34,8 @@ module nft::land {
         enable_mint_status: bool,
         enable_mint_request_time: u64,
         active_condition: u64,
-        active_condition_request_time: u64,
+        new_active_condition: u64,
+        new_active_condition_request_time: u64,
         minimum_injection_quantity: u64,
     }
 
@@ -75,7 +78,8 @@ module nft::land {
             enable_mint_status: true,
             enable_mint_request_time: 0,
             active_condition,
-            active_condition_request_time: 0,
+            new_active_condition: 0,
+            new_active_condition_request_time: 0,
             minimum_injection_quantity,
         };
 
@@ -87,7 +91,6 @@ module nft::land {
         transfer::transfer(minter_cap, minter);
     }
 
-    // clock objcet use '0x6'
     public entry fun mint<T>(clock: &Clock, _: &MinterCap, note: &Noteboard<T>, to: address, token_uri: vector<u8>, ctx: &mut TxContext) {
         assert!(get_enable_mint_status(clock, note), EMintingIsDisabled);
 
@@ -148,29 +151,28 @@ module nft::land {
         }
     }
 
-    // clock objcet use '0x6'
     public fun get_enable_mint_status<T>(clock: &Clock, note: &Noteboard<T>): bool {
-        let new_enable_mint_status = note.enable_mint_status;
-        let enable_mint_request_time = note.enable_mint_request_time;
-        if (new_enable_mint_status == true && clock::timestamp_ms(clock) > enable_mint_request_time + 2 * 24 * 60 * 60 * 1000) {
+        let mint_status = note.enable_mint_status;
+        let request_time = note.enable_mint_request_time;
+
+        if (
+            (mint_status == true && request_time == 0)
+            || (mint_status == true && clock::timestamp_ms(clock) >= request_time + TwoDay)
+        ) {
             true
         } else {
-            note.enable_mint_status
+            false
         }
     }
 
-    // clock objcet use '0x6'
     public fun get_active_condition<T>(clock: &Clock, note: &Noteboard<T>): u64 {
-        let new_active_condition = note.active_condition;
-        let active_condition_request_time = note.active_condition_request_time;
-        if (new_active_condition > 0 && clock::timestamp_ms(clock) > active_condition_request_time + 2 * 24 * 60 * 60 * 1000) {
-            new_active_condition
+        if (note.new_active_condition > 0 && clock::timestamp_ms(clock) >= note.new_active_condition_request_time + TwoDay) {
+            note.new_active_condition
         } else {
             note.active_condition
         }
     }
 
-    // clock objcet use '0x6'
     public entry fun enable_mint<T>(clock: &Clock, _: &OwnerCap, note: &mut Noteboard<T>) {
         assert!(!get_enable_mint_status(clock, note), EMintingAlreadyEnabled);
         note.enable_mint_request_time = clock::timestamp_ms(clock);
@@ -182,12 +184,17 @@ module nft::land {
         note.enable_mint_status = false;
     }
 
-    // clock objcet use '0x6'
     public entry fun set_active_condition<T>(clock: &Clock, _: &OwnerCap, note: &mut Noteboard<T>, new_active_condition: u64) {
         let old_active_condition = get_active_condition(clock, note);
         assert!(new_active_condition > old_active_condition, EActiveValueIsZero);
 
         note.active_condition = old_active_condition;
-        note.active_condition_request_time = clock::timestamp_ms(clock);
+        note.new_active_condition = new_active_condition;
+        note.new_active_condition_request_time = clock::timestamp_ms(clock);
+    }
+
+    #[test_only]
+    public fun test_init(ctx: &mut TxContext) {
+        init(ctx);
     }
 }
