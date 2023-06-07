@@ -17,7 +17,7 @@ module vip::vip {
     const EInvalidActivity: u64 = 0;
     const EUpgradeIntervalLessThan30Days: u64 = 1;
     const EExceedVipNumberLimit: u64 = 2;
-    const ELevelThresholdNotReached: u64 = 3;
+    const EUpgradeThresholdNotReached: u64 = 3;
     const EInvalidOwnerCapability: u64 = 4;
     const ELengthOfDataIsDifferent: u64 = 5;
 
@@ -81,7 +81,6 @@ module vip::vip {
         assert!(object::id(vip) == capability.vip_id, EInvalidOwnerCapability);
     }
 
-
     fun handle<T>(vip: &mut Vip<T>, amount: u64): u64 {
         let level_index = calculation_level_index<T>(vip, amount);
         let current_level = vector::borrow_mut(&mut vip.level_rule, level_index);
@@ -134,7 +133,7 @@ module vip::vip {
     fun deposit_<T>(vip: &mut Vip<T>, clock: &Clock, to: address, balance: Balance<T>) {
         let amount = balance::value(&balance);
         let timestamp =  clock::timestamp_ms(clock);
-        assert!(timestamp > vip.activity_start_time && timestamp < vip.activity_end_time, EInvalidActivity);
+        assert!(timestamp >= vip.activity_start_time && timestamp <= vip.activity_end_time, EInvalidActivity);
 
         if (vec_map::contains(&vip.vip_info, &to)){
             let (_, info) = vec_map::remove(&mut vip.vip_info, &to);
@@ -142,7 +141,7 @@ module vip::vip {
             assert!(timestamp - info.start_time < INTERVAL, EUpgradeIntervalLessThan30Days);
 
             let level_index = handle<T>(vip, new_amount);
-            assert!(level_index > get_level_index(vip, info.level), ELevelThresholdNotReached);
+            assert!(level_index > get_level_index(vip, info.level), EUpgradeThresholdNotReached);
 
             let info = VipInfo {
                 amount: new_amount,
@@ -203,7 +202,7 @@ module vip::vip {
         vip.activity_end_time = end_time;
     }
 
-    public entry fun set_level<T>(
+    public entry fun set_level_rule<T>(
         vip: &mut Vip<T>, 
         capability: &OwnerCapability<T>,
         level: u8,
@@ -221,7 +220,7 @@ module vip::vip {
         });
     }
 
-    public entry fun set_level_rule<T>(
+    public entry fun set_level_rules<T>(
         vip: &mut Vip<T>, 
         capability: &OwnerCapability<T>, 
         levels: vector<u8>,
@@ -267,8 +266,6 @@ module vip::vip {
         vip.level_rule = vector::empty();
     }
 
-
-
     public fun get_latest_list<T>(vip: &Vip<T>): VecMap<address, u8> {
         let result: VecMap<address, u8> = vec_map::empty();
         let keys = vec_map::keys(&vip.vip_info);
@@ -281,5 +278,9 @@ module vip::vip {
             i = i + 1;
         };
         result
+    }
+
+    public fun get_level<T>(vip: &Vip<T>, account: address): u8 {
+        vec_map::get(&vip.vip_info, &account).level
     }
 }
