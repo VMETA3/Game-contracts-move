@@ -13,7 +13,7 @@ module raffle::raffle_bag {
     use sui::dynamic_object_field as dof;
     use sui::clock::Clock;
     use sui::event;
-    use raffle::util;
+    use raffle::utils;
 
     /// The hardcoded ID for the singleton Clock Object.
     const SUI_CLOCK_OBJECT_ID: address = @0x6;
@@ -38,8 +38,8 @@ module raffle::raffle_bag {
         id: UID,
         name: vector<u8>,
         prize_pool: ObjectBag,
+        prize_kinds: vector<u8>,
         balance: Balance<T>,
-        random_nonce: u64
     }
 
     /// Owner capability
@@ -67,6 +67,7 @@ module raffle::raffle_bag {
     const EInvalidPrizeKind: u64 = 3;
     const EPrizeKindAlreadyExists: u64 = 4;
     const EPrizeKindNotEmpty: u64 = 5;
+    const ENotContainsPrizeKind: u64 = 6;
 
     //////////////////////////////////////////////////////
     /// HELPER FUNCTIONS
@@ -77,8 +78,8 @@ module raffle::raffle_bag {
             id: object::new(ctx),
             name,
             prize_pool: object_bag::new(ctx),
+            prize_kinds: vector::empty(),
             balance,
-            random_nonce: 0,
         };
 
         let owner_cap = OwnerCapability {
@@ -93,7 +94,7 @@ module raffle::raffle_bag {
         assert!(object::id(raffle_bag) == capability.raffle_bag_id, EInvalidOwnerCapability);
     }
 
-    fun set_prize_kind_<T: key + store>(
+    fun set_prize_kind_<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>, 
         kind: u8, 
         amount: u64, 
@@ -105,7 +106,7 @@ module raffle::raffle_bag {
             assert!(false, EInvalidPrizeKind);
         };
 
-        let prize = Prize<T> {
+        let prize = Prize<U> {
             id: object::new(ctx),
             kind,
             amount,
@@ -118,10 +119,11 @@ module raffle::raffle_bag {
             assert!(false, EPrizeKindAlreadyExists);
         };
         object_bag::add(&mut raffle_bag.prize_pool, kind, prize);
+        vector::push_back(&mut raffle_bag.prize_kinds, kind);
     }
 
     // Destroy Prize object after transferring all NFTs
-    fun handle_clean<T, U: key + store>(
+    fun handle_clean_prize<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>,
         kind: u8,
         ctx: &mut TxContext
@@ -142,63 +144,52 @@ module raffle::raffle_bag {
     }
 
     fun handle_weight<T: key + store>(
-        total_weight: u64, 
         weights: &mut vector<u64>, 
         prize_pool: &ObjectBag, 
         kind: u8
-    ): (u64, &mut vector<u64>) {
+    ): u64 {
         let prize: &Prize<T> = object_bag::borrow(prize_pool, kind);
-        total_weight = total_weight + prize.weight;
         vector::push_back(weights, prize.weight);
-        (total_weight, weights)
-    }
-
-    // Calculate the total weight of the prize pool
-    fun total_weight<T: key + store>(prize_pool: &ObjectBag): (u64, vector<u64>) {
-        let total_weight = 0;
-        let weights = vector::empty();
-        if (object_bag::contains(prize_pool, ACard)) {
-            handle_weight<T>(total_weight, &mut weights, prize_pool, ACard);
-        };
-        if (object_bag::contains(prize_pool, BCard)) {
-            handle_weight<T>(total_weight, &mut weights, prize_pool, BCard);
-        };
-        if (object_bag::contains(prize_pool, CCard)) {
-            handle_weight<T>(total_weight, &mut weights, prize_pool, CCard);
-        };
-        if (object_bag::contains(prize_pool, DCard)) {
-            handle_weight<T>(total_weight, &mut weights, prize_pool, DCard);
-        };
-        if (object_bag::contains(prize_pool, VM3Coin)) {
-            handle_weight<T>(total_weight, &mut weights, prize_pool, VM3Coin);
-        };
-        (total_weight, weights)
+        prize.weight
     }
 
     // Active gift package rule
-    fun active_rule<T: key + store>(
-        random_number: u64, 
-        prize_pool: &ObjectBag
-    ): u64 {
-        let (total_weight, weights) = total_weight<T>(prize_pool);
+    fun draw_rule<T, U: key + store>(
+        raffle_bag: &mut RaffleBag<T>, 
+        random_number: u64,
+    ): u8 {
+        let kinds = &raffle_bag.prize_kinds;
+        let kinds_length = vector::length(kinds);
 
-        let number = object_bag::length(prize_pool) + 1;
-
-        let num = random_number % total_weight;
-
-        let minimum = 0;
+        let total_weight = 0;
         let i = 0;
-        while (!vector::is_empty(&weights)) {
-            if (i != 0) {
-                minimum = minimum + vector::pop_back(&mut weights);
-            };
-            if (num >= minimum && num < vector::pop_back(&mut weights) + minimum) {
-                number = i;
-            };
+        while (i < kinds_length) {
+            let kind = *vector::borrow(kinds, i);
+            let prize: &Prize<U> = object_bag::borrow(&raffle_bag.prize_pool, kind);
+            total_weight = total_weight + prize.weight;
             i = i + 1;
         };
-        assert!(number < object_bag::length(prize_pool), EInvalidRandomNumber);
-        number
+
+        let random: u64 = random_number % total_weight;
+
+        let result: u8 = 0;
+        let minimum: u64 = 0;
+        let i = 0;
+        while (i < kinds_length) {
+            let kind = *vector::borrow(kinds, i);
+            let prize: &Prize<U> = object_bag::borrow(&raffle_bag.prize_pool, kind);
+            let weight = prize.weight;
+
+            if (random >= minimum && random < weight + minimum) {
+                result = kind;
+                break
+            };
+            minimum = minimum + weight;
+            i = i + 1;
+        };
+
+        assert!(vector::contains(kinds, &result), EInvalidRandomNumber);
+        result
     }
 
     fun transfer_balance<T>(
@@ -212,25 +203,16 @@ module raffle::raffle_bag {
         transfer::public_transfer(coin, to);
     }
 
-    fun random<T>(
-        raffle_bag: &mut RaffleBag<T>, 
-        clock: &Clock, 
-        ctx: &mut TxContext
-    ): u64 {
-        raffle_bag.random_nonce = raffle_bag.random_nonce + 1;
-        util::random_n2(raffle_bag.random_nonce, clock, ctx)
-    }
-
     fun draw_<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>, 
+        random_number: u64,
         to: address, 
-        clock: &Clock, 
         ctx: &mut TxContext
     ) {
-        let random_num = random(raffle_bag, clock, ctx);
-        let number = active_rule<U>(random_num, &raffle_bag.prize_pool);
 
-        let prize: &mut Prize<U> = object_bag::borrow_mut(&mut raffle_bag.prize_pool, number);
+        let kind = draw_rule<T, U>(raffle_bag, random_number);
+
+        let prize: &mut Prize<U> = object_bag::borrow_mut(&mut raffle_bag.prize_pool, kind);
         let kind = prize.kind;
 
         if (kind == VM3Coin){
@@ -239,7 +221,7 @@ module raffle::raffle_bag {
             event::emit(DrawCardEvent{
                 to,
                 prize_kind: kind,
-                nft_id: object::id_from_bytes(b"0xVM3"),
+                nft_id: object::id_from_bytes(b"0xDCard"),
             });
         }else{
             let nft = redeem_prize_nft<T,U>(raffle_bag, kind);
@@ -272,7 +254,7 @@ module raffle::raffle_bag {
         transfer::public_transfer(cap, sender(ctx));
     }
 
-    public entry fun set_prize_kind<T: key + store>(
+    public entry fun set_prize<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>, 
         capability: &OwnerCapability<T>, 
         kind: u8, 
@@ -282,16 +264,16 @@ module raffle::raffle_bag {
         ctx: &mut TxContext
     ) {
         check_owner_capability_validity(raffle_bag, capability);
-        set_prize_kind_(raffle_bag, kind, amount, weight, description, ctx);
+        set_prize_kind_<T, U>(raffle_bag, kind, amount, weight, description, ctx);
     }
 
-    public entry fun set_prize_kinds<T: key + store>(
+    public entry fun set_prizes<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>, 
         capability: &OwnerCapability<T>, 
-        kind: vector<u8>, 
+        kinds: vector<u8>, 
         amounts: vector<u64>, 
         weights: vector<u64>, 
-        description: vector<vector<u8>>, 
+        descriptions: vector<vector<u8>>, 
         ctx: &mut TxContext
     ) {
         check_owner_capability_validity(raffle_bag, capability);
@@ -301,25 +283,25 @@ module raffle::raffle_bag {
 
         let i = 0;
         while (i < len) {
-            let kind = *vector::borrow(&kind, i);
+            let kind = *vector::borrow(&kinds, i);
             let amount = *vector::borrow(&amounts, i);
             let weight = *vector::borrow(&weights, i);
-            let description = *vector::borrow(&description, i);
-            set_prize_kind_(raffle_bag, kind, amount, weight, description, ctx);
+            let description = *vector::borrow(&descriptions, i);
+            set_prize_kind_<T, U>(raffle_bag, kind, amount, weight, description, ctx);
             i=i+1;
         }
     }
 
-    public entry fun deposit_prize_nft<T: key + store>(
+    public entry fun deposit_prize_nft<T, U: key + store>(
         raffle_bag: &mut RaffleBag<T>, 
         capability: &OwnerCapability<T>,
         kind: u8,
-        nft: T,
+        nft: U,
     ) {
         check_owner_capability_validity(raffle_bag, capability);
 
         let nft_id = object::id(&nft);
-        let prize: &mut Prize<T> = object_bag::borrow_mut(&mut raffle_bag.prize_pool, kind);
+        let prize: &mut Prize<U> = object_bag::borrow_mut(&mut raffle_bag.prize_pool, kind);
 
         vector::push_back(&mut prize.nft_ids, nft_id);
         dof::add(&mut prize.id, nft_id, nft);
@@ -341,7 +323,8 @@ module raffle::raffle_bag {
         ctx: &mut TxContext
     ) {
         check_owner_capability_validity(raffle_bag, capability);
-        draw_<T,U>(raffle_bag, sender(ctx), clock, ctx);
+        let random_number = utils::random(clock, ctx);
+        draw_<T,U>(raffle_bag, random_number, sender(ctx), ctx);
     }
 
     public entry fun draw_to<T, U: key + store>(
@@ -352,7 +335,8 @@ module raffle::raffle_bag {
         ctx: &mut TxContext
     ) {
         check_owner_capability_validity(raffle_bag, capability);
-        draw_<T,U>(raffle_bag, to, clock, ctx);
+        let random_number = utils::random(clock, ctx);
+        draw_<T,U>(raffle_bag, random_number, to, ctx);
     }
 
     public entry fun clean_empty_prize<T, U: key + store>(
@@ -364,6 +348,11 @@ module raffle::raffle_bag {
 
         let Prize<U>{id, kind:_, amount:_, description:_, nft_ids:_, weight:_}  = object_bag::remove(&mut raffle_bag.prize_pool, kind);
         object::delete(id);
+
+        let (is_contains, index) = vector::index_of(&mut raffle_bag.prize_kinds, &kind);
+        if (is_contains) {
+            vector::remove(&mut raffle_bag.prize_kinds, index);
+        }
     }
 
     public entry fun clean_prize_pool<T, U: key + store>(
@@ -373,23 +362,30 @@ module raffle::raffle_bag {
     ) {
         check_owner_capability_validity(raffle_bag, capability);
 
-        if (object_bag::contains(&raffle_bag.prize_pool, ACard)) {
-            handle_clean<T, U>(raffle_bag, ACard, ctx);
-            clean_empty_prize<T, U>(raffle_bag, ACard);
-        };
-        if (object_bag::contains(&raffle_bag.prize_pool, BCard)) {
-            handle_clean<T, U>(raffle_bag, BCard, ctx);
-            clean_empty_prize<T, U>(raffle_bag, BCard);
-        };
-        if (object_bag::contains(&raffle_bag.prize_pool, CCard)) {
-            handle_clean<T, U>(raffle_bag, CCard, ctx);
-            clean_empty_prize<T, U>(raffle_bag, CCard);
-        };
-        if (object_bag::contains(&raffle_bag.prize_pool, DCard)) {
-            clean_empty_prize<T,U>(raffle_bag, DCard);
-        };
-        if (object_bag::contains(&raffle_bag.prize_pool, VM3Coin)) {
-            clean_empty_prize<T,U>(raffle_bag, VM3Coin);
-        };
+        while (!vector::is_empty(&raffle_bag.prize_kinds)) {
+            let kind = vector::pop_back(&mut raffle_bag.prize_kinds);
+            handle_clean_prize<T, U>(raffle_bag, kind, ctx);
+        }
     }
+
+    #[test_only]
+    public fun test_draw<T, U: key + store>(
+        raffle_bag: &mut RaffleBag<T>, 
+        capability: &OwnerCapability<T>, 
+        random_number: u64,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        check_owner_capability_validity(raffle_bag, capability);
+        draw_<T,U>(raffle_bag, random_number, to, ctx);
+    }
+
+    #[test_only]
+    public fun test_is_contains_prize<T>(
+        raffle_bag: &mut RaffleBag<T>, 
+        kind: u8,
+    ): bool {
+        object_bag::contains(&raffle_bag.prize_pool, kind)
+    }
+    
 }

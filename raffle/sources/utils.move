@@ -1,11 +1,20 @@
 // Copyright (c) VMeta3 Labs, Inc.
 // SPDX-License-Identifier: MIT
 
-module raffle::util {
+module raffle::utils {
     use sui::clock::{Self, Clock};
     use sui::tx_context::{Self, TxContext};
     use std::hash;
     use std::vector;
+
+    public fun random(clock: &Clock, ctx: &TxContext): u64 {
+       let seed = vector::empty<u8>();
+        vector::append(&mut seed, get_current_timestamp_hash(clock));
+        vector::append(&mut seed, *tx_context::digest(ctx));
+        vector::append(&mut seed, u642bytes(tx_context::epoch(ctx)));
+
+        bytes2u64(hash::sha3_256(seed))
+    }
 
     // reuturn a random number interval [0,n)
     public fun random_n(n: u64, clock: &Clock): u64 {
