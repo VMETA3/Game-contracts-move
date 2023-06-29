@@ -5,9 +5,7 @@ module demo::land {
     use sui::url::{Self, Url};
     use sui::vec_map::{Self, VecMap};
     use sui::event;
-    use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
-    use sui::coin::{Self, Coin};
     use std::ascii;
     use std::option;
 
