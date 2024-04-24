@@ -1,1 +1,1 @@
-# metaverse-contracts-move
+# game-contracts-move
